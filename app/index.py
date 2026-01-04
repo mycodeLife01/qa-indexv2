@@ -25,7 +25,9 @@ redis_uri = os.getenv("RAG_REDIS_URL")
 chroma_host = os.getenv("CHROMA_HOST", "localhost")
 chroma_port = os.getenv("CHROMA_PORT", "8000")
 remote_db = chromadb.HttpClient(host=chroma_host, port=int(chroma_port))
-chroma_collection = remote_db.get_or_create_collection("my-qa-llama")
+chroma_collection = remote_db.get_or_create_collection(
+    os.getenv("CHROMA_COLLECTION_NAME")
+)
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
 # assign cache management (使用 redis_uri 会自动创建同步和异步客户端)
@@ -102,7 +104,7 @@ def process(url: str, content_hash: str, file_type: str):
         # index
         pipeline = IngestionPipeline(
             transformations=[
-                SentenceSplitter(chunk_size=512, chunk_overlap=128),
+                SentenceSplitter(chunk_size=512, chunk_overlap=50),
                 # TitleExtractor(),
                 GoogleGenAIEmbedding(
                     model_name="gemini-embedding-001",

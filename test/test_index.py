@@ -1,6 +1,23 @@
 import pytest
+import os
+import redis
 from app.celery.tasks import index_document_task
 from app.celery.celery import celery_app
+
+
+@pytest.fixture(autouse=True)
+def clear_cache(monkeypatch):
+    """Clear ingestion cache and docstore before each test for isolation"""
+    redis_uri = os.getenv("RAG_REDIS_URL")
+    cache_name = os.getenv("LLAMA_REDIS_CACHE_NAME")
+    docstore_name = os.getenv("LLAMA_DOC_STORE_NAME")
+    r = redis.from_url(redis_uri)
+    # Delete all cache keys
+    for key in r.scan_iter(f"{cache_name}*"):
+        r.delete(key)
+    # Delete all docstore keys
+    for key in r.scan_iter(f"{docstore_name}*"):
+        r.delete(key)
 
 
 @pytest.fixture(autouse=True)
@@ -18,8 +35,8 @@ def set_eager_mode(monkeypatch):
 def test_index_task_full_flow():
     """测试从接收到执行完成任务的全过程"""
     # 测试参数
-    content_hash = "6aab2192674424aea61094d09693a6e41487030e04f1c97f8e1565c2e1106749"
-    file_url = "https://my-qa-go-1313494932.cos.ap-shanghai.myqcloud.com/uploads-local/6aab2192674424aea61094d09693a6e41487030e04f1c97f8e1565c2e1106749.txt"
+    content_hash = "41ce67d792e52c7c2cdbe76e34c0c1f749b879f1c225b07cc1c8581fe52e341f"
+    file_url = "https://my-qa-go-1313494932.cos.ap-shanghai.myqcloud.com/uploads-local/41ce67d792e52c7c2cdbe76e34c0c1f749b879f1c225b07cc1c8581fe52e341f.txt"
     file_type = "txt"
 
     # 执行任务（eager模式下同步执行）
