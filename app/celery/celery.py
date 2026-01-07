@@ -1,5 +1,8 @@
 from celery import Celery
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 celery_app = Celery(
     os.getenv("CELERY_APP_NAME"),

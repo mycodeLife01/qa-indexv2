@@ -1,5 +1,6 @@
 import logging
 import redis
+import requests
 from celery import Task
 from app.celery.celery import celery_app
 from app.index import process
@@ -10,14 +11,45 @@ import os
 redis_client = redis.from_url(os.getenv("BUSINESS_REDIS_URL"), decode_responses=True)
 logger = logging.getLogger(__name__)
 
+QA_SERVER_URL = os.getenv("QA_SERVER_URL")
+
 
 class IndexTask(Task):
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
+        content_hash = None
         if args and len(args) > 0:
             content_hash = args[0]
             lock_key = f"index_lock:{content_hash}"
             redis_client.delete(lock_key)
             logger.info(f"释放去重锁: {lock_key}")
+
+        # 回调通知 Go Server 更新状态
+        if content_hash:
+            final_status = "SUCCESS" if status == "SUCCESS" else "FAILURE"
+            try:
+                callback_url = f"{QA_SERVER_URL}/internal/file/status"
+                resp = requests.post(
+                    callback_url,
+                    json={
+                        "content_hash": content_hash,
+                        "status": final_status,
+                        "message": (
+                            str(retval) if status == "FAILURE" else "Index completed"
+                        ),
+                    },
+                    timeout=5,
+                )
+                if resp.status_code != 200:
+                    logger.error(
+                        f"Callback failed with status {resp.status_code}: {resp.text}"
+                    )
+                else:
+                    logger.info(
+                        f"Callback success for {content_hash} with status {final_status}"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to send callback: {e}")
+
         super().after_return(status, retval, task_id, args, kwargs, einfo)
 
 
